@@ -1,5 +1,4 @@
 use act_sdk::prelude::*;
-use base64::Engine;
 use std::fs;
 use std::path::Path;
 
@@ -24,17 +23,19 @@ mod component {
             })
     }
 
-    /// Read a binary file and return base64-encoded content.
-    #[act_tool(description = "Read a binary file and return its content as base64", read_only)]
-    fn read_binary_file(
+    /// Read a binary file and return raw bytes with appropriate MIME type.
+    #[act_tool(description = "Read a binary file and return its raw content with detected MIME type", read_only)]
+    async fn read_binary_file(
         #[doc = "Path to the binary file"] path: String,
-    ) -> ActResult<String> {
+        ctx: &mut ActContext,
+    ) -> ActResult<()> {
         let data = fs::read(&path)
             .map_err(|e| match e.kind() {
                 std::io::ErrorKind::NotFound => ActError::not_found(format!("File not found: {path}")),
                 _ => ActError::internal(format!("Read error: {e}")),
             })?;
-        Ok(base64::engine::general_purpose::STANDARD.encode(&data))
+        let mime = guess_mime(&path);
+        ctx.send_content(data, Some(mime), vec![]).await
     }
 
     /// Read multiple files at once.
@@ -347,6 +348,31 @@ fn glob_match(pattern: &str, name: &str) -> bool {
             return false;
         }
     }
+}
+
+fn guess_mime(path: &str) -> String {
+    let ext = path.rsplit('.').next().unwrap_or("").to_lowercase();
+    match ext.as_str() {
+        "txt" => "text/plain",
+        "html" | "htm" => "text/html",
+        "css" => "text/css",
+        "js" => "application/javascript",
+        "json" => "application/json",
+        "xml" => "application/xml",
+        "csv" => "text/csv",
+        "md" => "text/markdown",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        "webp" => "image/webp",
+        "pdf" => "application/pdf",
+        "zip" => "application/zip",
+        "gz" | "gzip" => "application/gzip",
+        "tar" => "application/x-tar",
+        "wasm" => "application/wasm",
+        _ => "application/octet-stream",
+    }.to_string()
 }
 
 fn search_recursive(
