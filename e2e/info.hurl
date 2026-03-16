@@ -1,4 +1,4 @@
-GET {{host}}/info
+GET {{baseurl}}/info
 HTTP 200
 [Asserts]
-jsonpath "$.name" == "filesystem"
+jsonpath "$['std:name']" == "filesystem"

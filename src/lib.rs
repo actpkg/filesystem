@@ -35,7 +35,8 @@ mod component {
                 _ => ActError::internal(format!("Read error: {e}")),
             })?;
         let mime = guess_mime(&path);
-        ctx.send_content(data, Some(mime), vec![]).await
+        ctx.send_content(data, Some(mime), vec![]);
+        Ok(())
     }
 
     /// Read multiple files at once.

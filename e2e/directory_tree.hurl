@@ -1,22 +1,22 @@
 # Create nested structure
-POST {{host}}/tools/create-directory
+POST {{baseurl}}/tools/create-directory
 {"arguments": {"path": "{{test_dir}}/tree/sub1"}}
 HTTP 200
 
-POST {{host}}/tools/create-directory
+POST {{baseurl}}/tools/create-directory
 {"arguments": {"path": "{{test_dir}}/tree/sub2"}}
 HTTP 200
 
-POST {{host}}/tools/write-file
+POST {{baseurl}}/tools/write-file
 {"arguments": {"path": "{{test_dir}}/tree/root.txt", "content": "root"}}
 HTTP 200
 
-POST {{host}}/tools/write-file
+POST {{baseurl}}/tools/write-file
 {"arguments": {"path": "{{test_dir}}/tree/sub1/child.txt", "content": "child"}}
 HTTP 200
 
 # Get tree
-POST {{host}}/tools/directory-tree
+POST {{baseurl}}/tools/directory-tree
 {"arguments": {"path": "{{test_dir}}/tree"}}
 HTTP 200
 [Asserts]

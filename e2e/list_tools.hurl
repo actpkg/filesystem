@@ -1,8 +1,8 @@
-POST {{host}}/tools
+POST {{baseurl}}/tools
 HTTP 200
 [Asserts]
-jsonpath "$.tools[*].name" includes "read-file"
-jsonpath "$.tools[*].name" includes "write-file"
-jsonpath "$.tools[*].name" includes "list-directory"
-jsonpath "$.tools[*].name" includes "search-files"
-jsonpath "$.tools[*].name" includes "exists"
+jsonpath "$.tools[*].name" contains "read-file"
+jsonpath "$.tools[*].name" contains "write-file"
+jsonpath "$.tools[*].name" contains "list-directory"
+jsonpath "$.tools[*].name" contains "search-files"
+jsonpath "$.tools[*].name" contains "exists"

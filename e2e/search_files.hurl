@@ -1,18 +1,18 @@
 # Setup
-POST {{host}}/tools/write-file
+POST {{baseurl}}/tools/write-file
 {"arguments": {"path": "{{test_dir}}/search/foo.rs", "content": ""}}
 HTTP 200
 
-POST {{host}}/tools/write-file
+POST {{baseurl}}/tools/write-file
 {"arguments": {"path": "{{test_dir}}/search/bar.rs", "content": ""}}
 HTTP 200
 
-POST {{host}}/tools/write-file
+POST {{baseurl}}/tools/write-file
 {"arguments": {"path": "{{test_dir}}/search/baz.txt", "content": ""}}
 HTTP 200
 
 # Search for *.rs
-POST {{host}}/tools/search-files
+POST {{baseurl}}/tools/search-files
 {"arguments": {"path": "{{test_dir}}/search", "pattern": "*.rs"}}
 HTTP 200
 [Asserts]

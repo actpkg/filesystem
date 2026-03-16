@@ -1,14 +1,14 @@
 # Setup: write files
-POST {{host}}/tools/write-file
+POST {{baseurl}}/tools/write-file
 {"arguments": {"path": "{{test_dir}}/listdir/a.txt", "content": "a"}}
 HTTP 200
 
-POST {{host}}/tools/write-file
+POST {{baseurl}}/tools/write-file
 {"arguments": {"path": "{{test_dir}}/listdir/b.txt", "content": "b"}}
 HTTP 200
 
 # List
-POST {{host}}/tools/list-directory
+POST {{baseurl}}/tools/list-directory
 {"arguments": {"path": "{{test_dir}}/listdir"}}
 HTTP 200
 [Asserts]

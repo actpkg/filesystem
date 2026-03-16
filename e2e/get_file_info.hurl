@@ -1,8 +1,8 @@
-POST {{host}}/tools/write-file
+POST {{baseurl}}/tools/write-file
 {"arguments": {"path": "{{test_dir}}/info.txt", "content": "hello"}}
 HTTP 200
 
-POST {{host}}/tools/get-file-info
+POST {{baseurl}}/tools/get-file-info
 {"arguments": {"path": "{{test_dir}}/info.txt"}}
 HTTP 200
 [Asserts]
