@@ -4,13 +4,19 @@ port := `python3 -c 'import socket; s=socket.socket(socket.AF_INET, socket.SOCK_
 addr := "[::1]:" + port
 baseurl := "http://" + addr
 
+init:
+    wit-deps
+
+setup: init
+    prek install
+
 build:
     cargo build --target wasm32-wasip2 --release
 
 test:
     #!/usr/bin/env bash
     TEST_DIR=$(mktemp -d)
-    {{act}} serve {{wasm}} --listen "{{addr}}" &
+    {{act}} serve {{wasm}} --listen "{{addr}}" --allow-dir "/test:$TEST_DIR" &
     trap "kill $!; rm -rf $TEST_DIR" EXIT
     npx wait-on {{baseurl}}/info
-    hurl --test --variable "baseurl={{baseurl}}" --variable "test_dir=$TEST_DIR" e2e/*.hurl
+    hurl --test --variable "baseurl={{baseurl}}" --variable "test_dir=/test" e2e/*.hurl
