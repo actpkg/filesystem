@@ -4,9 +4,9 @@ version = 4
 
 [[package]]
 name = "act-sdk"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c96e371eb75b49ca78e7024ab10e47d601b9b381a9d8092d30d68b3aa829450e"
+checksum = "190ac12848a4401bb6f5c5742e324d583099a4609ccdd710cd09eac5839adf40"
 dependencies = [
  "act-sdk-macros",
  "act-types",
@@ -18,9 +18,9 @@ dependencies = [
 
 [[package]]
 name = "act-sdk-macros"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "114e52751f31ea5c015a4a6efe931bcbc24c842a8f3ced915af562fb00ea3121"
+checksum = "5f337f4ab71808b19c80a6f7c7bf816693dddfd7d1a4e7f0a4d1224f97d4fc17"
 dependencies = [
  "act-types",
  "ciborium",
@@ -35,9 +35,9 @@ dependencies = [
 
 [[package]]
 name = "act-types"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00b3766146b4d23acdc93f9eeccb82b4a90a37ab68d813a20446eb8a97967975"
+checksum = "547d17052a1db6b2b9f3c7972266b4940cd047e4d46767f8e4f3ca913c260dce"
 dependencies = [
  "base64",
  "ciborium",
@@ -145,8 +145,6 @@ name = "component-filesystem"
 version = "0.1.0"
 dependencies = [
  "act-sdk",
- "schemars 1.2.1",
- "serde",
  "serde_json",
  "wit-bindgen 0.54.0",
 ]

@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -16,13 +19,11 @@ jobs:
       - uses: actions/checkout@v6
       - uses: moonrepo/setup-rust@v1
         with:
-          channel: nightly
-          targets: wasm32-wasip2
-          bins: wit-deps-cli, just
+          bins: wit-deps-cli
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: just init
-      - run: just build
+      - run: wit-deps
+      - run: cargo build --release
       - uses: actions/upload-artifact@v7
         with:
           name: component.wasm
@@ -35,14 +36,11 @@ jobs:
       - uses: actions/checkout@v6
       - uses: moonrepo/setup-rust@v1
         with:
-          channel: nightly
-          targets: wasm32-wasip2
-          components: clippy
           bins: wit-deps-cli
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: wit-deps
-      - run: cargo clippy --target wasm32-wasip2 -- -D warnings
+      - run: cargo clippy -- -D warnings
 
   e2e:
     name: E2E Test
@@ -50,17 +48,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: component.wasm
-          path: target/wasm32-wasip2/release/
-      - uses: actcore/act-cli/setup@main
-      - uses: moonrepo/setup-rust@v1
-        with:
-          bins: just, hurl
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: just test
+      - name: Test
+        run: |
+          npx @actcore/act run *.wasm --http --listen 3000 &
+          npx wait-on http://[::1]:3000/info
+          npx @orangeopensource/hurl --test --variable "baseurl=http://[::1]:3000" e2e/*.hurl
 
   fmt:
     name: Format
@@ -68,9 +63,35 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: moonrepo/setup-rust@v1
-        with:
-          channel: nightly
-          components: rustfmt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: cargo fmt -- --check
+
+  publish:
+    name: Publish
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [e2e, clippy, fmt]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: component.wasm
+      - uses: oras-project/setup-oras@v1
+      - run: echo ${{ secrets.GITHUB_TOKEN }} | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Publish
+        id: publish
+        run: |
+          VERSION=$(npx @actcore/act info *.wasm --format json | jq -r .version)
+          IMAGE="ghcr.io/${{ github.repository }}"
+          DIGEST=$(oras push "${IMAGE}:${VERSION}" *.wasm:application/wasm 2>&1 | grep -oP 'sha256:[a-f0-9]+')
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+      - name: Attest
+        if: steps.publish.outputs.digest != ''
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.publish.outputs.image }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
