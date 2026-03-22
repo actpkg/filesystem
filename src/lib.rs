@@ -3,11 +3,9 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-#[act_component(
-    name = "filesystem",
-    version = "0.1.0",
-    description = "File system operations (read, write, list, search, move)"
-)]
+act_sdk::embed_skill!("skill/");
+
+#[act_component]
 mod component {
     use super::*;
 
