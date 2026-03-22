@@ -16,7 +16,7 @@ build:
 test:
     #!/usr/bin/env bash
     TEST_DIR=$(mktemp -d)
-    {{act}} serve {{wasm}} --listen "{{addr}}" --allow-dir "/test:$TEST_DIR" &
+    {{act}} run {{wasm}} --listen "{{addr}}" --allow-dir "/test:$TEST_DIR" &
     trap "kill $!; rm -rf $TEST_DIR" EXIT
     npx wait-on {{baseurl}}/info
     hurl --test --variable "baseurl={{baseurl}}" --variable "test_dir=/test" e2e/*.hurl
