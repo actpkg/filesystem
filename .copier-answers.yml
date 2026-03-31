@@ -1,4 +1,4 @@
-_commit: 80d5564
+_commit: 308483a
 _src_path: https://github.com/actcore/act-component-template
 description: File system operations (read, write, list, search, move)
 needs_filesystem: true
