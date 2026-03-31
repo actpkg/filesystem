@@ -54,7 +54,7 @@ jobs:
       - name: Test
         run: |
           npx @actcore/act run *.wasm --http --listen 3000 &
-          npx wait-on http://[::1]:3000/info
+          npx wait-on -t 180s http://[::1]:3000/info
           npx @orangeopensource/hurl --test --variable "baseurl=http://[::1]:3000" e2e/*.hurl
 
   fmt:
