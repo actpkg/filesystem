@@ -84,7 +84,9 @@ jobs:
       - name: Publish
         id: publish
         run: |
-          VERSION=$(npx @actcore/act info *.wasm --format json | jq -r .version)
+          npx @actcore/act info *.wasm --format json 2>/dev/null > info.json
+          cat info.json
+          VERSION=$(jq -r .version info.json)
           IMAGE="ghcr.io/${{ github.repository }}"
           DIGEST=$(oras push "${IMAGE}:${VERSION}" *.wasm:application/wasm 2>&1 | grep -oP 'sha256:[a-f0-9]+')
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
