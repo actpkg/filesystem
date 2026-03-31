@@ -88,7 +88,9 @@ jobs:
           cat info.json
           VERSION=$(jq -r .version info.json)
           IMAGE="ghcr.io/${{ github.repository }}"
-          DIGEST=$(oras push "${IMAGE}:${VERSION}" *.wasm:application/wasm 2>&1 | grep -oP 'sha256:[a-f0-9]+')
+          ORAS_OUT=$(oras push "${IMAGE}:${VERSION}" *.wasm:application/wasm 2>&1)
+          echo "$ORAS_OUT"
+          DIGEST=$(echo "$ORAS_OUT" | grep -oP 'sha256:[a-f0-9]+' | tail -1) || true
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
       - name: Attest
