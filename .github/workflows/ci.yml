@@ -53,9 +53,10 @@ jobs:
           name: component.wasm
       - name: Test
         run: |
-          npx @actcore/act run *.wasm --http --listen 3000 &
+          TEST_DIR=$(mktemp -d)
+          npx @actcore/act run *.wasm --http --listen 3000 --allow-dir "/test:$TEST_DIR" &
           npx wait-on -t 180s http://[::1]:3000/info
-          npx @orangeopensource/hurl --test --variable "baseurl=http://[::1]:3000" e2e/*.hurl
+          npx @orangeopensource/hurl --test --variable "baseurl=http://[::1]:3000" --variable "test_dir=/test" e2e/*.hurl
 
   fmt:
     name: Format

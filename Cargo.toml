@@ -1,6 +1,6 @@
 [package]
 name = "component-filesystem"
-description = ""
+description = "File system operations (read, write, list, search, move)"
 version = "0.1.0"
 edition = "2024"
 
