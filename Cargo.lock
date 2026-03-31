@@ -4,9 +4,9 @@ version = 4
 
 [[package]]
 name = "act-sdk"
-version = "0.2.3"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "760b3eaab0647123316d848846d22ed0cb235430603e9aba15ca614d6a16d5a6"
+checksum = "c96e371eb75b49ca78e7024ab10e47d601b9b381a9d8092d30d68b3aa829450e"
 dependencies = [
  "act-sdk-macros",
  "act-types",
