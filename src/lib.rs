@@ -91,7 +91,7 @@ mod component {
         #[doc = "Glob pattern to filter by name (e.g. '*.rs', 'test_*')"] glob: Option<String>,
         #[doc = "Recurse into subdirectories (default false)"] recursive: Option<bool>,
         #[doc = "Maximum depth when recursive (default 10)"] max_depth: Option<u32>,
-    ) -> ActResult<String> {
+    ) -> ActResult<Vec<serde_json::Value>> {
         let recursive = recursive.unwrap_or(false);
         let max_depth = max_depth.unwrap_or(10);
         let mut items = Vec::new();
@@ -113,8 +113,7 @@ mod component {
                 .cmp(b.get("name").and_then(|v| v.as_str()).unwrap_or(""))
         });
 
-        serde_json::to_string_pretty(&items)
-            .map_err(|e| ActError::internal(format!("JSON error: {e}")))
+        Ok(items)
     }
 
     /// Move or rename a file/directory.
