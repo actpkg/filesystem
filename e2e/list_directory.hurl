@@ -12,5 +12,5 @@ POST {{baseurl}}/tools/list-directory
 {"arguments": {"path": "{{test_dir}}/listdir"}}
 HTTP 200
 [Asserts]
-jsonpath "$.content[0].data" contains "a.txt"
-jsonpath "$.content[0].data" contains "b.txt"
+jsonpath "$.content[0].data[*].name" includes "a.txt"
+jsonpath "$.content[0].data[*].name" includes "b.txt"

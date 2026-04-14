@@ -16,8 +16,8 @@ HTTP 200
 jsonpath "$.content[0].data" == "moveme"
 
 # Original should be gone
-POST {{baseurl}}/tools/exists
+POST {{baseurl}}/tools/read-file
 {"arguments": {"path": "{{test_dir}}/src.txt"}}
-HTTP 200
+HTTP *
 [Asserts]
-jsonpath "$.content[0].data" contains "\"exists\":false"
+jsonpath "$.error.kind" == "std:not-found"

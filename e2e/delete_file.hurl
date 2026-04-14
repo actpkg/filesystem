@@ -11,8 +11,8 @@ HTTP 200
 jsonpath "$.content[0].data" contains "to_delete.txt"
 
 # Verify gone
-POST {{baseurl}}/tools/exists
+POST {{baseurl}}/tools/read-file
 {"arguments": {"path": "{{test_dir}}/to_delete.txt"}}
-HTTP 200
+HTTP *
 [Asserts]
-jsonpath "$.content[0].data" contains "\"exists\":false"
+jsonpath "$.error.kind" == "std:not-found"

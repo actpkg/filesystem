@@ -1,3 +1,4 @@
 [std]
+name = "filesystem"
 
 [std.capabilities."wasi:filesystem"]
