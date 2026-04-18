@@ -5,9 +5,9 @@ version = "0.2.0"
 edition = "2024"
 
 [dependencies]
-act-sdk = "0.3"
+act-sdk = "0.4"
 serde_json = "1.0.149"
-wit-bindgen = { version = "0.56", features = ["async-spawn"] }
+wit-bindgen = { version = "0.57", features = ["async-spawn"] }
 
 [profile.release]
 lto = "fat"
