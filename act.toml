@@ -2,3 +2,8 @@
 name = "filesystem"
 
 [std.capabilities."wasi:filesystem"]
+description = "Read / write / list files on the host filesystem. Path scope is delegated to the host policy."
+
+[[std.capabilities."wasi:filesystem".allow]]
+path = "**"
+mode = "rw"
