@@ -20,14 +20,10 @@ test:
     #!/usr/bin/env bash
     set -euo pipefail
     TEST_DIR=$(mktemp -d)
-    {{act}} run {{wasm}} --http --listen "{{addr}}" --allow-dir "/test:$TEST_DIR" &
+    {{act}} run {{wasm}} --http --listen "{{addr}}" --fs-policy allowlist --fs-allow "$TEST_DIR/**" &
     trap "kill $!; rm -rf $TEST_DIR" EXIT
     npx wait-on -t 180s {{baseurl}}/info
-<<<<<<< before updating
-    npx @orangeopensource/hurl --test --variable "baseurl={{baseurl}}" --variable "test_dir=/test" e2e/*.hurl
-=======
-    {{hurl}} --test --variable "baseurl={{baseurl}}" e2e/*.hurl
->>>>>>> after updating
+    {{hurl}} --test --variable "baseurl={{baseurl}}" --variable "test_dir=$TEST_DIR" e2e/*.hurl
 
 publish:
     #!/usr/bin/env bash
