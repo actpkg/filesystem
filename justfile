@@ -20,7 +20,7 @@ test:
     #!/usr/bin/env bash
     set -euo pipefail
     TEST_DIR=$(mktemp -d)
-    {{act}} run {{wasm}} --http --listen "{{addr}}" --fs-policy allowlist --fs-allow "$TEST_DIR/**" &
+    {{act}} run {{wasm}} --http --listen "{{addr}}" --fs-policy allowlist --fs-allow "$TEST_DIR" &
     trap "kill $!; rm -rf $TEST_DIR" EXIT
     npx wait-on -t 180s {{baseurl}}/info
     {{hurl}} --test --variable "baseurl={{baseurl}}" --variable "test_dir=$TEST_DIR" e2e/*.hurl
