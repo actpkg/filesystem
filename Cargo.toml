@@ -6,7 +6,7 @@ edition = "2024"
 
 [dependencies]
 act-sdk = "0.6"
-serde_json = "1.0.149"
+serde_json = "1.0.150"
 wit-bindgen = { version = "0.57", features = ["async-spawn"] }
 
 [profile.release]
