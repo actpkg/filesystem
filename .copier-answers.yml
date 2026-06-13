@@ -1,4 +1,4 @@
-_commit: 0.5.0-3-g0d0de80
+_commit: 0.6.0
 _src_path: https://github.com/actcore/act-template-rust
 description: File system operations (read, write, list, search, move)
 needs_filesystem: true
