@@ -30,7 +30,8 @@ test: pack
     #!/usr/bin/env bash
     set -euo pipefail
     TEST_DIR=$(mktemp -d)
-    {{act}} run {{wasm}} --http --listen "{{addr}}" --fs-policy allowlist --fs-allow "$TEST_DIR" &
+    GRANT="{\"wasi:filesystem\":{\"mode\":\"allowlist\",\"allow\":[{\"path\":\"$TEST_DIR\",\"mode\":\"rw\"}]}}"
+    {{act}} run {{wasm}} --http --listen "{{addr}}" --grant "$GRANT" &
     trap "kill $!; rm -rf $TEST_DIR" EXIT
     curl --retry 60 --retry-connrefused --retry-delay 1 -fsS -o /dev/null {{baseurl}}/info
     {{hurl}} --test --variable "baseurl={{baseurl}}" --variable "test_dir=$TEST_DIR" e2e/*.hurl
