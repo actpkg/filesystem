@@ -12,14 +12,14 @@ Sandboxed file system access. All paths are relative to the component's mounted 
 ## Tools
 
 ### read_file
-Read a text file. Returns content as string.
+Read a text file. Returns the text as a content-part (MIME guessed from extension, default `text/plain`).
 
 ```
 read_file(path: "/data/config.json")
 ```
 
 ### read_binary_file
-Read a binary file. Returns raw bytes with detected MIME type (streaming).
+Read a binary file. Returns the raw bytes as a content-part with detected MIME type.
 
 ### write_file
 Create or overwrite a file. Parent directories are created automatically.

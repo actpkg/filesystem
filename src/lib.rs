@@ -1,41 +1,84 @@
 use act_sdk::prelude::*;
+use serde::Serialize;
 use std::fs;
 use std::io;
 use std::path::Path;
+
+/// Result of a write/append operation.
+#[derive(Serialize, JsonSchema)]
+struct WriteResult {
+    path: String,
+    bytes_written: u64,
+}
+
+/// A single directory entry.
+#[derive(Serialize, JsonSchema)]
+struct DirEntry {
+    /// File or directory name (relative path when listing recursively).
+    name: String,
+    /// One of `file`, `directory`, or `symlink`.
+    #[serde(rename = "type")]
+    entry_type: String,
+    /// Size in bytes (omitted when metadata is unavailable).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    size: Option<u64>,
+}
+
+/// Result of a move/rename operation.
+#[derive(Serialize, JsonSchema)]
+struct MoveResult {
+    from: String,
+    to: String,
+}
+
+/// Result of a copy operation.
+#[derive(Serialize, JsonSchema)]
+struct CopyResult {
+    from: String,
+    to: String,
+    bytes_copied: u64,
+}
+
+/// Result of a delete operation.
+#[derive(Serialize, JsonSchema)]
+struct DeleteResult {
+    deleted: String,
+}
 
 #[act_component]
 mod component {
     use super::*;
 
-    /// Read a text file.
+    /// Read a text file and return it as a content-part with a guessed text MIME type.
     #[act_tool(description = "Read the contents of a text file", read_only)]
-    fn read_file(#[doc = "Path to the file to read"] path: String) -> ActResult<String> {
-        fs::read_to_string(&path).map_err(|e| match e.kind() {
+    fn read_file(#[doc = "Path to the file to read"] path: String) -> ActResult<Content> {
+        let content = fs::read_to_string(&path).map_err(|e| match e.kind() {
             io::ErrorKind::NotFound => ActError::not_found(format!("File not found: {path}")),
             io::ErrorKind::PermissionDenied => ActError::new(
                 "std:capability-denied",
                 format!("Permission denied: {path}"),
             ),
             _ => ActError::internal(format!("Read error: {e}")),
-        })
+        })?;
+        // read_file always returns text; fall back to text/plain for unknown extensions.
+        let mime = match guess_mime(&path) {
+            "application/octet-stream" => "text/plain",
+            m => m,
+        };
+        Ok(Content(mime, content.into_bytes()))
     }
 
-    /// Read a binary file and return raw bytes with appropriate MIME type.
+    /// Read a binary file and return raw bytes with detected MIME type.
     #[act_tool(
         description = "Read a binary file and return its raw content with detected MIME type",
         read_only
     )]
-    async fn read_binary_file(
-        #[doc = "Path to the binary file"] path: String,
-        ctx: &mut ActContext,
-    ) -> ActResult<()> {
+    fn read_binary_file(#[doc = "Path to the binary file"] path: String) -> ActResult<Content> {
         let data = fs::read(&path).map_err(|e| match e.kind() {
             io::ErrorKind::NotFound => ActError::not_found(format!("File not found: {path}")),
             _ => ActError::internal(format!("Read error: {e}")),
         })?;
-        let mime = guess_mime(&path);
-        ctx.send_content(data, Some(mime), vec![]);
-        Ok(())
+        Ok(Content(guess_mime(&path), data))
     }
 
     /// Write content to a file (creates or overwrites). Parent directories are created automatically.
@@ -43,7 +86,7 @@ mod component {
     fn write_file(
         #[doc = "Path to write to"] path: String,
         #[doc = "Content to write"] content: String,
-    ) -> ActResult<String> {
+    ) -> ActResult<WriteResult> {
         if let Some(parent) = Path::new(&path).parent()
             && !parent.as_os_str().is_empty()
         {
@@ -51,11 +94,10 @@ mod component {
                 .map_err(|e| ActError::internal(format!("Cannot create directories: {e}")))?;
         }
         fs::write(&path, &content).map_err(|e| ActError::internal(format!("Write error: {e}")))?;
-        Ok(serde_json::json!({
-            "path": path,
-            "bytes_written": content.len(),
+        Ok(WriteResult {
+            bytes_written: content.len() as u64,
+            path,
         })
-        .to_string())
     }
 
     /// Append content to a file (creates if missing). Avoids reading the whole file.
@@ -63,7 +105,7 @@ mod component {
     fn append_file(
         #[doc = "Path to append to"] path: String,
         #[doc = "Content to append"] content: String,
-    ) -> ActResult<String> {
+    ) -> ActResult<WriteResult> {
         use io::Write;
         let mut file = fs::OpenOptions::new()
             .create(true)
@@ -72,11 +114,10 @@ mod component {
             .map_err(|e| ActError::internal(format!("Open error: {e}")))?;
         file.write_all(content.as_bytes())
             .map_err(|e| ActError::internal(format!("Write error: {e}")))?;
-        Ok(serde_json::json!({
-            "path": path,
-            "bytes_appended": content.len(),
+        Ok(WriteResult {
+            bytes_written: content.len() as u64,
+            path,
         })
-        .to_string())
     }
 
     /// List directory contents with optional glob filter and recursion.
@@ -89,7 +130,7 @@ mod component {
         #[doc = "Glob pattern to filter by name (e.g. '*.rs', 'test_*')"] glob: Option<String>,
         #[doc = "Recurse into subdirectories (default false)"] recursive: Option<bool>,
         #[doc = "Maximum depth when recursive (default 10)"] max_depth: Option<u32>,
-    ) -> ActResult<Vec<serde_json::Value>> {
+    ) -> ActResult<Vec<DirEntry>> {
         let recursive = recursive.unwrap_or(false);
         let max_depth = max_depth.unwrap_or(10);
         let mut items = Vec::new();
@@ -104,13 +145,7 @@ mod component {
             &mut items,
         )?;
 
-        items.sort_by(|a, b| {
-            a.get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .cmp(b.get("name").and_then(|v| v.as_str()).unwrap_or(""))
-        });
-
+        items.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(items)
     }
 
@@ -119,14 +154,13 @@ mod component {
     fn move_file(
         #[doc = "Source path"] source: String,
         #[doc = "Destination path"] destination: String,
-    ) -> ActResult<String> {
+    ) -> ActResult<MoveResult> {
         fs::rename(&source, &destination)
             .map_err(|e| ActError::internal(format!("Move error: {e}")))?;
-        Ok(serde_json::json!({
-            "from": source,
-            "to": destination,
+        Ok(MoveResult {
+            from: source,
+            to: destination,
         })
-        .to_string())
     }
 
     /// Copy a file (filesystem-optimized, supports reflinks).
@@ -134,22 +168,21 @@ mod component {
     fn copy_file(
         #[doc = "Source file path"] source: String,
         #[doc = "Destination file path"] destination: String,
-    ) -> ActResult<String> {
+    ) -> ActResult<CopyResult> {
         let bytes = fs::copy(&source, &destination)
             .map_err(|e| ActError::internal(format!("Copy error: {e}")))?;
-        Ok(serde_json::json!({
-            "from": source,
-            "to": destination,
-            "bytes_copied": bytes,
+        Ok(CopyResult {
+            from: source,
+            to: destination,
+            bytes_copied: bytes,
         })
-        .to_string())
     }
 
     /// Delete a file.
     #[act_tool(description = "Delete a file", destructive)]
-    fn delete_file(#[doc = "Path to the file to delete"] path: String) -> ActResult<String> {
+    fn delete_file(#[doc = "Path to the file to delete"] path: String) -> ActResult<DeleteResult> {
         fs::remove_file(&path).map_err(|e| ActError::internal(format!("Delete error: {e}")))?;
-        Ok(serde_json::json!({ "deleted": path }).to_string())
+        Ok(DeleteResult { deleted: path })
     }
 
     /// Delete a directory (must be empty, or use recursive).
@@ -158,7 +191,7 @@ mod component {
         #[doc = "Path to the directory to delete"] path: String,
         #[doc = "Whether to delete recursively (including contents). Default false."]
         recursive: Option<bool>,
-    ) -> ActResult<String> {
+    ) -> ActResult<DeleteResult> {
         if recursive.unwrap_or(false) {
             fs::remove_dir_all(&path)
                 .map_err(|e| ActError::internal(format!("Delete error: {e}")))?;
@@ -167,7 +200,7 @@ mod component {
                 ActError::internal(format!("Delete error (directory not empty?): {e}"))
             })?;
         }
-        Ok(serde_json::json!({ "deleted": path }).to_string())
+        Ok(DeleteResult { deleted: path })
     }
 }
 
@@ -179,7 +212,7 @@ fn collect_entries(
     recursive: bool,
     depth: u32,
     max_depth: u32,
-    results: &mut Vec<serde_json::Value>,
+    results: &mut Vec<DirEntry>,
 ) -> ActResult<()> {
     let entries = fs::read_dir(dir).map_err(|e| match e.kind() {
         io::ErrorKind::NotFound => {
@@ -208,7 +241,7 @@ fn collect_entries(
                 name.clone()
             };
 
-            let file_type = if is_dir {
+            let entry_type = if is_dir {
                 "directory"
             } else if metadata.as_ref().is_some_and(|m| m.is_symlink()) {
                 "symlink"
@@ -216,16 +249,11 @@ fn collect_entries(
                 "file"
             };
 
-            let mut item = serde_json::json!({
-                "name": display_path,
-                "type": file_type,
+            results.push(DirEntry {
+                name: display_path,
+                entry_type: entry_type.to_string(),
+                size: metadata.as_ref().map(|m| m.len()),
             });
-            if let Some(meta) = &metadata {
-                item.as_object_mut()
-                    .unwrap()
-                    .insert("size".into(), serde_json::json!(meta.len()));
-            }
-            results.push(item);
         }
 
         if recursive && is_dir && depth < max_depth {
@@ -278,7 +306,7 @@ fn glob_match(pattern: &str, name: &str) -> bool {
     }
 }
 
-fn guess_mime(path: &str) -> String {
+fn guess_mime(path: &str) -> &'static str {
     let ext = path.rsplit('.').next().unwrap_or("").to_lowercase();
     match ext.as_str() {
         "txt" => "text/plain",
@@ -301,5 +329,4 @@ fn guess_mime(path: &str) -> String {
         "wasm" => "application/wasm",
         _ => "application/octet-stream",
     }
-    .to_string()
 }

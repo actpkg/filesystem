@@ -150,7 +150,8 @@ name = "component-filesystem"
 version = "0.3.2"
 dependencies = [
  "act-sdk",
- "serde_json",
+ "schemars 1.2.1",
+ "serde",
  "wit-bindgen",
 ]
 

@@ -8,7 +8,7 @@ POST {{baseurl}}/tools/delete_file
 {"arguments": {"path": "{{test_dir}}/to_delete.txt"}}
 HTTP 200
 [Asserts]
-jsonpath "$.content[0].data" contains "to_delete.txt"
+jsonpath "$.content[0].data.deleted" contains "to_delete.txt"
 
 # Verify gone
 POST {{baseurl}}/tools/read_file
