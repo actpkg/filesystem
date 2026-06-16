@@ -3,8 +3,6 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-act_sdk::embed_skill!("skill/");
-
 #[act_component]
 mod component {
     use super::*;
