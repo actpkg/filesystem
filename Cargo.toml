@@ -1,11 +1,11 @@
 [package]
 name = "component-filesystem"
 description = "File system operations (read, write, list, search, move)"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 
 [dependencies]
-act-sdk = "0.11"
+act-sdk = "0.12"
 wit-bindgen = { version = "0.58", features = ["async-spawn"] }
 serde = { version = "1", features = ["derive"] }
 schemars = "1"
