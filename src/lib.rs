@@ -54,11 +54,7 @@ mod component {
     fn read_file(#[doc = "Path to the file to read"] path: String) -> ActResult<Content> {
         let content = fs::read_to_string(&path).map_err(|e| match e.kind() {
             io::ErrorKind::NotFound => ActError::not_found(format!("File not found: {path}")),
-            io::ErrorKind::PermissionDenied => ActError::new(
-                "std:capability-denied",
-                format!("Permission denied: {path}"),
-            ),
-            _ => ActError::internal(format!("Read error: {e}")),
+            _ => io_error(e, "Read", &path),
         })?;
         // read_file always returns text; fall back to text/plain for unknown extensions.
         let mime = match guess_mime(&path) {
@@ -76,7 +72,7 @@ mod component {
     fn read_binary_file(#[doc = "Path to the binary file"] path: String) -> ActResult<Content> {
         let data = fs::read(&path).map_err(|e| match e.kind() {
             io::ErrorKind::NotFound => ActError::not_found(format!("File not found: {path}")),
-            _ => ActError::internal(format!("Read error: {e}")),
+            _ => io_error(e, "Read", &path),
         })?;
         Ok(Content(guess_mime(&path), data))
     }
@@ -91,9 +87,9 @@ mod component {
             && !parent.as_os_str().is_empty()
         {
             fs::create_dir_all(parent)
-                .map_err(|e| ActError::internal(format!("Cannot create directories: {e}")))?;
+                .map_err(|e| io_error(e, "Create directories", &parent.display().to_string()))?;
         }
-        fs::write(&path, &content).map_err(|e| ActError::internal(format!("Write error: {e}")))?;
+        fs::write(&path, &content).map_err(|e| io_error(e, "Write", &path))?;
         Ok(WriteResult {
             bytes_written: content.len() as u64,
             path,
@@ -111,9 +107,9 @@ mod component {
             .create(true)
             .append(true)
             .open(&path)
-            .map_err(|e| ActError::internal(format!("Open error: {e}")))?;
+            .map_err(|e| io_error(e, "Open", &path))?;
         file.write_all(content.as_bytes())
-            .map_err(|e| ActError::internal(format!("Write error: {e}")))?;
+            .map_err(|e| io_error(e, "Write", &path))?;
         Ok(WriteResult {
             bytes_written: content.len() as u64,
             path,
@@ -156,7 +152,7 @@ mod component {
         #[doc = "Destination path"] destination: String,
     ) -> ActResult<MoveResult> {
         fs::rename(&source, &destination)
-            .map_err(|e| ActError::internal(format!("Move error: {e}")))?;
+            .map_err(|e| io_error(e, "Move", &format!("{source} -> {destination}")))?;
         Ok(MoveResult {
             from: source,
             to: destination,
@@ -170,7 +166,7 @@ mod component {
         #[doc = "Destination file path"] destination: String,
     ) -> ActResult<CopyResult> {
         let bytes = fs::copy(&source, &destination)
-            .map_err(|e| ActError::internal(format!("Copy error: {e}")))?;
+            .map_err(|e| io_error(e, "Copy", &format!("{source} -> {destination}")))?;
         Ok(CopyResult {
             from: source,
             to: destination,
@@ -181,7 +177,7 @@ mod component {
     /// Delete a file.
     #[act_tool(description = "Delete a file", destructive)]
     fn delete_file(#[doc = "Path to the file to delete"] path: String) -> ActResult<DeleteResult> {
-        fs::remove_file(&path).map_err(|e| ActError::internal(format!("Delete error: {e}")))?;
+        fs::remove_file(&path).map_err(|e| io_error(e, "Delete", &path))?;
         Ok(DeleteResult { deleted: path })
     }
 
@@ -193,14 +189,34 @@ mod component {
         recursive: Option<bool>,
     ) -> ActResult<DeleteResult> {
         if recursive.unwrap_or(false) {
-            fs::remove_dir_all(&path)
-                .map_err(|e| ActError::internal(format!("Delete error: {e}")))?;
+            fs::remove_dir_all(&path).map_err(|e| io_error(e, "Delete", &path))?;
         } else {
-            fs::remove_dir(&path).map_err(|e| {
-                ActError::internal(format!("Delete error (directory not empty?): {e}"))
+            fs::remove_dir(&path).map_err(|e| match e.kind() {
+                io::ErrorKind::PermissionDenied => io_error(e, "Delete", &path),
+                _ => ActError::internal(format!("Delete error (directory not empty?): {e}")),
             })?;
         }
         Ok(DeleteResult { deleted: path })
+    }
+}
+
+/// The error an I/O failure should become, once a caller has handled the
+/// cases it has something specific to say about (a missing file, usually).
+///
+/// A refusal is not a failure of this component. The host decides what may be
+/// touched, and when it says no — `PermissionDenied`, which is where WASI's
+/// `EACCES` and `EPERM` both land — the agent should hear
+/// `std:capability-denied`, a kind it can act on: ask for access, or try a
+/// path it was given. `std:internal` would send it looking for a bug here.
+///
+/// One function rather than an arm per call site, because the arm per call
+/// site is how eight of the nine tools came to lack it.
+fn io_error(e: io::Error, action: &str, subject: &str) -> ActError {
+    match e.kind() {
+        io::ErrorKind::PermissionDenied => {
+            ActError::capability_denied(format!("Permission denied: {subject}"))
+        }
+        _ => ActError::internal(format!("{action} error: {e}")),
     }
 }
 
@@ -218,11 +234,11 @@ fn collect_entries(
         io::ErrorKind::NotFound => {
             ActError::not_found(format!("Directory not found: {}", dir.display()))
         }
-        _ => ActError::internal(format!("Read dir error: {e}")),
+        _ => io_error(e, "Read dir", &dir.display().to_string()),
     })?;
 
     for entry in entries {
-        let entry = entry.map_err(|e| ActError::internal(format!("Entry error: {e}")))?;
+        let entry = entry.map_err(|e| io_error(e, "Entry", &dir.display().to_string()))?;
         let metadata = entry.metadata().ok();
         let name = entry.file_name().to_string_lossy().to_string();
         let is_dir = metadata.as_ref().is_some_and(|m| m.is_dir());

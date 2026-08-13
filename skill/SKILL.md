@@ -64,3 +64,10 @@ Delete a directory. Use `recursive: true` for non-empty. Destructive.
 1. `list_directory` to explore (add `glob` + `recursive` to search)
 2. `read_file` to inspect content
 3. `write_file` / `append_file` to create or modify
+
+## Errors
+
+- `std:capability-denied` — the host refused access to that path. It is not a
+  bug and retrying will not help: work within the paths you were given, or ask
+  the user to grant access.
+- `std:not-found` — the file or directory does not exist.
