@@ -1,0 +1,18 @@
+[package]
+# Named after the component on purpose: the fleet's global cargo build-dir
+# (build.build-dir in ~/.cargo/config.toml) is shared, and every crate named
+# `e2e` lands on the same deps/e2e-<hash> artifact path — with several
+# components' suites building at once, cargo has run one component's test
+# binary for another. A unique package name makes the artifact path unique.
+name = "e2e-filesystem"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Detach from any outer workspace this component may sit in.
+[workspace]
+
+[dev-dependencies]
+rmcp = { version = "3.5", features = ["client", "transport-child-process"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "io-util", "sync", "time", "net"] }
+serde_json = "1"
