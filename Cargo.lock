@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "component-filesystem"
-version = "0.3.8"
+version = "0.3.9"
 dependencies = [
  "act-sdk",
  "schemars 1.2.2",

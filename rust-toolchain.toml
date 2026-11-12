@@ -1,4 +1,6 @@
+# wasm32-wasip3 is tier 2 since Rust 1.100 (2026-11-12) — stable carries it,
+# so we track stable without pinning a version.
 [toolchain]
 channel = "stable"
-targets = ["wasm32-wasip2"]
+targets = ["wasm32-wasip3"]
 components = ["rustfmt", "clippy"]
