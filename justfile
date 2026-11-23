@@ -18,7 +18,7 @@ setup: init
 # ceiling, so at runtime every grant is refused as "outside ceiling" and the
 # failure points anywhere but at the missing metadata.
 build:
-    cargo build --target wasm32-wasip2 --release
+    cargo build --target wasm32-wasip3 --release
     {{actbuild}} pack {{wasm}}
 
 # Re-embed act:component metadata and act:skill without rebuilding. `pack` is

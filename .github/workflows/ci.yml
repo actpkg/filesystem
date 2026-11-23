@@ -20,6 +20,7 @@ jobs:
       - uses: moonrepo/setup-rust@v1
         with:
           bins: wkg, just
+          target: wasm32-wasip3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: just init
@@ -37,6 +38,7 @@ jobs:
       - uses: moonrepo/setup-rust@v1
         with:
           bins: wkg, just
+          target: wasm32-wasip3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: cargo fmt -- --check
@@ -56,6 +58,7 @@ jobs:
       - uses: moonrepo/setup-rust@v1
         with:
           bins: wkg, just
+          target: wasm32-wasip3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: just init
@@ -78,6 +81,7 @@ jobs:
       - uses: moonrepo/setup-rust@v1
         with:
           bins: wkg, just
+          target: wasm32-wasip3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: sigstore/cosign-installer@v4.1.2   # defaults to cosign 3.x → OCI 1.1 referrer signatures
