@@ -45,7 +45,10 @@ list_directory(path: "/data", glob: "*.rs", recursive: true)
 list_directory(path: "/data", glob: "*.json", recursive: true, max_depth: 5)
 ```
 
-Returns JSON array with name, type, size for each entry.
+Returns an object: `entries` (name, type, size), `truncated`, `skipped_dirs`.
+`max_entries` (default 10000) bounds recursive listings — set it higher if you
+need more, and check `truncated` before trusting a listing as complete.
+Unreadable subdirectories are skipped and counted in `skipped_dirs`, not errors.
 
 ### move_file
 Move or rename a file or directory.

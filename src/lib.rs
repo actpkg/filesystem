@@ -2,7 +2,7 @@ use act_sdk::prelude::*;
 use serde::Serialize;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Result of a write/append operation.
 #[derive(Serialize, JsonSchema)]
@@ -22,6 +22,22 @@ struct DirEntry {
     /// Size in bytes (omitted when metadata is unavailable).
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<u64>,
+}
+
+/// Result of `list_directory`.
+///
+/// An object rather than a bare array so the listing can carry what the
+/// traversal had to leave out: entries it stopped at the cap, directories it
+/// could not read. Both are facts an agent can act on, not errors — a
+/// partial answer that says so beats one that pretends to be complete.
+#[derive(Serialize, JsonSchema)]
+struct DirectoryListing {
+    entries: Vec<DirEntry>,
+    /// True when the traversal stopped at `max_entries` before finishing.
+    truncated: bool,
+    /// Number of subdirectories that could not be read (permission refused
+    /// by the host) and were skipped.
+    skipped_dirs: u32,
 }
 
 /// Result of a move/rename operation.
@@ -126,23 +142,28 @@ mod component {
         #[doc = "Glob pattern to filter by name (e.g. '*.rs', 'test_*')"] glob: Option<String>,
         #[doc = "Recurse into subdirectories (default false)"] recursive: Option<bool>,
         #[doc = "Maximum depth when recursive (default 10)"] max_depth: Option<u32>,
-    ) -> ActResult<Vec<DirEntry>> {
+        #[doc = "Stop after this many entries and report truncated (default 10000)"]
+        max_entries: Option<u32>,
+    ) -> ActResult<DirectoryListing> {
         let recursive = recursive.unwrap_or(false);
         let max_depth = max_depth.unwrap_or(10);
-        let mut items = Vec::new();
-
-        collect_entries(
-            Path::new(&path),
-            Path::new(&path),
-            glob.as_deref(),
-            recursive,
-            0,
+        let mut walk = Traversal {
+            base: PathBuf::from(&path),
+            glob: glob.clone(),
             max_depth,
-            &mut items,
-        )?;
+            max_entries: max_entries.unwrap_or(10_000).max(1) as usize,
+            truncated: false,
+            skipped_dirs: 0,
+            results: Vec::new(),
+        };
 
-        items.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(items)
+        collect_entries(&mut walk, Path::new(&path), recursive, 0)?;
+        walk.results.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(DirectoryListing {
+            entries: walk.results,
+            truncated: walk.truncated,
+            skipped_dirs: walk.skipped_dirs,
+        })
     }
 
     /// Move or rename a file/directory.
@@ -220,36 +241,66 @@ fn io_error(e: io::Error, action: &str, subject: &str) -> ActError {
     }
 }
 
-/// Collect directory entries, optionally filtering by glob and recursing.
-fn collect_entries(
-    base: &Path,
-    dir: &Path,
-    glob: Option<&str>,
-    recursive: bool,
-    depth: u32,
+/// Traversal bookkeeping shared across the recursion of `collect_entries`:
+/// the entry cap that bounds a listing, and the counters that make what was
+/// left out visible instead of silent.
+struct Traversal {
+    base: PathBuf,
+    glob: Option<String>,
     max_depth: u32,
-    results: &mut Vec<DirEntry>,
-) -> ActResult<()> {
-    let entries = fs::read_dir(dir).map_err(|e| match e.kind() {
-        io::ErrorKind::NotFound => {
-            ActError::not_found(format!("Directory not found: {}", dir.display()))
-        }
-        _ => io_error(e, "Read dir", &dir.display().to_string()),
-    })?;
+    max_entries: usize,
+    truncated: bool,
+    skipped_dirs: u32,
+    results: Vec<DirEntry>,
+}
 
+/// Collect directory entries, optionally filtering by glob and recursing.
+///
+/// Recursion stops at the entry cap (`truncated`), and directories the host
+/// refuses to read are counted in `skipped_dirs` rather than failing the
+/// whole listing — a tree that happens to contain an unreadable subtree must
+/// still be listable. The root directory itself is the exception: failing to
+/// open it is what the caller asked about, so that stays an error.
+fn collect_entries(walk: &mut Traversal, dir: &Path, recursive: bool, depth: u32) -> ActResult<()> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            // Subdirectories the host refuses to read are skipped and
+            // counted; the root is the one failure that is the answer.
+            if depth > 0 && e.kind() == io::ErrorKind::PermissionDenied {
+                walk.skipped_dirs += 1;
+                return Ok(());
+            }
+            if depth == 0 && e.kind() == io::ErrorKind::NotFound {
+                return Err(ActError::not_found(format!(
+                    "Directory not found: {}",
+                    dir.display()
+                )));
+            }
+            return Err(io_error(e, "Read dir", &dir.display().to_string()));
+        }
+    };
     for entry in entries {
-        let entry = entry.map_err(|e| io_error(e, "Entry", &dir.display().to_string()))?;
+        let Ok(entry) = entry else {
+            walk.skipped_dirs += 1;
+            continue;
+        };
         let metadata = entry.metadata().ok();
         let name = entry.file_name().to_string_lossy().to_string();
         let is_dir = metadata.as_ref().is_some_and(|m| m.is_dir());
 
-        let matches = glob.is_none_or(|g| glob_match(g, &name));
+        if walk.results.len() >= walk.max_entries {
+            walk.truncated = true;
+            return Ok(());
+        }
+
+        let matches = walk.glob.as_deref().is_none_or(|g| glob_match(g, &name));
 
         if matches {
             let display_path = if recursive {
                 entry
                     .path()
-                    .strip_prefix(base)
+                    .strip_prefix(&walk.base)
                     .unwrap_or(&entry.path())
                     .to_string_lossy()
                     .to_string()
@@ -265,23 +316,15 @@ fn collect_entries(
                 "file"
             };
 
-            results.push(DirEntry {
+            walk.results.push(DirEntry {
                 name: display_path,
                 entry_type: entry_type.to_string(),
                 size: metadata.as_ref().map(|m| m.len()),
             });
         }
 
-        if recursive && is_dir && depth < max_depth {
-            collect_entries(
-                base,
-                &entry.path(),
-                glob,
-                recursive,
-                depth + 1,
-                max_depth,
-                results,
-            )?;
+        if recursive && is_dir && depth < walk.max_depth {
+            collect_entries(walk, &entry.path(), recursive, depth + 1)?;
         }
     }
 

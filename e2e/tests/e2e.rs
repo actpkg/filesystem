@@ -519,10 +519,8 @@ async fn list_directory() {
         .await;
     }
 
-    // list_directory returns an array, so the host does not populate
-    // structured_content for it (measured in the python suite — only
-    // object-shaped tool results do); the array still arrives as a
-    // JSON-encoded text block, same as any other content part.
+    // The result is an object (entries + truncated + skipped_dirs) so the
+    // host populates structured_content from it.
     let result = call(
         &client,
         "list_directory",
@@ -530,20 +528,94 @@ async fn list_directory() {
     )
     .await;
     assert_ne!(result.is_error, Some(true), "list_directory failed: {result:?}");
-    assert!(
-        result.structured_content.is_none(),
-        "array-shaped results carry no structured_content, got: {result:?}"
-    );
-    let entries: Value =
-        serde_json::from_str(&first_text(&result)).expect("entries are a JSON array");
-    let names: Vec<&str> = entries
+    let listing = result
+        .structured_content
+        .expect("object-shaped results carry structured_content");
+    let names: Vec<&str> = listing["entries"]
         .as_array()
-        .expect("entries are an array")
+        .expect("entries is an array")
         .iter()
         .map(|e| e["name"].as_str().expect("entry has a name"))
         .collect();
     assert!(names.contains(&"a.txt"), "a.txt must be listed, got: {names:?}");
     assert!(names.contains(&"b.txt"), "b.txt must be listed, got: {names:?}");
+    assert_eq!(listing["truncated"], json!(false), "small listing is complete");
+    assert_eq!(listing["skipped_dirs"], json!(0), "nothing was skipped");
+
+    client.cancel().await.ok();
+    cleanup(&dir);
+}
+
+/// A listing is bounded: `max_entries` stops the traversal and reports
+/// `truncated` instead of walking an unbounded tree (a home directory with
+/// tens of thousands of entries used to monopolise the actor for minutes).
+#[tokio::test]
+async fn list_directory_truncates_at_max_entries() {
+    let dir = private_dir("listdir-trunc");
+    let client = connect(&dir).await;
+    let listdir = dir.join("listdir-trunc");
+    std::fs::create_dir_all(&listdir).expect("create listdir");
+
+    for i in 0..5 {
+        call(
+            &client,
+            "write_file",
+            json!({"path": listdir.join(format!("f{i}.txt")).to_string_lossy(), "content": "x"}),
+        )
+        .await;
+    }
+
+    let result = call(
+        &client,
+        "list_directory",
+        json!({"path": listdir.to_string_lossy(), "max_entries": 2}),
+    )
+    .await;
+    assert_ne!(result.is_error, Some(true), "list_directory failed: {result:?}");
+    let listing = result.structured_content.expect("structured result");
+    let entries = listing["entries"].as_array().expect("entries array");
+    assert_eq!(entries.len(), 2, "stopped at the cap, got: {entries:?}");
+    assert_eq!(listing["truncated"], json!(true), "must report truncation");
+
+    client.cancel().await.ok();
+    cleanup(&dir);
+}
+
+/// An unreadable subdirectory is skipped and counted, not fatal: a tree
+/// that happens to contain a root-owned or host-refused subtree must still
+/// be listable (a PermissionDenied inside the recursion used to fail the
+/// whole listing).
+#[tokio::test]
+#[cfg(unix)]
+async fn list_directory_skips_unreadable_subdirs() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = private_dir("listdir-skip");
+    let client = connect(&dir).await;
+    let listdir = dir.join("listdir-skip");
+    let locked = listdir.join("locked");
+    std::fs::create_dir_all(&locked).expect("create locked dir");
+    std::fs::write(locked.join("hidden.txt"), "x").expect("write inside locked");
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000))
+        .expect("chmod locked");
+
+    let result = call(
+        &client,
+        "list_directory",
+        json!({"path": listdir.to_string_lossy(), "recursive": true}),
+    )
+    .await;
+    assert_ne!(result.is_error, Some(true), "list_directory failed: {result:?}");
+    let listing = result.structured_content.expect("structured result");
+    assert_eq!(
+        listing["skipped_dirs"], json!(1),
+        "the unreadable dir is counted, got: {listing:?}"
+    );
+    assert_eq!(listing["truncated"], json!(false));
+
+    // Restore so cleanup can remove it.
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755))
+        .expect("chmod back");
 
     client.cancel().await.ok();
     cleanup(&dir);
@@ -615,7 +687,29 @@ async fn listing_outside_the_grant_is_denied() {
     let dir = private_dir("denied-list");
     let client = connect(&dir).await;
     let parent = dir.parent().unwrap().to_string_lossy().into_owned();
-    expect_error(&client, "list_directory", json!({"path": parent}), DENIED).await;
+
+    // The host refuses per-entry, and a refusal inside a traversal is a
+    // skip, not a failure: the listing returns what the grant covers and
+    // counts the rest. Sibling names stay hidden — the caller learns a
+    // count, never a path it may not see.
+    let result = call(&client, "list_directory", json!({"path": parent})).await;
+    assert_ne!(result.is_error, Some(true), "listing failed: {result:?}");
+    let listing = result.structured_content.expect("structured result");
+    let names: Vec<&str> = listing["entries"]
+        .as_array()
+        .expect("entries array")
+        .iter()
+        .map(|e| e["name"].as_str().expect("name"))
+        .collect();
+    assert!(
+        names.iter().all(|n| n.contains("act-filesystem-e2e")),
+        "only grant-visible entries may be listed, got: {names:?}"
+    );
+    assert!(
+        listing["skipped_dirs"].as_u64().unwrap_or(0) >= 1,
+        "refused entries are counted as skipped, got: {listing:?}"
+    );
+
     client.cancel().await.ok();
     cleanup(&dir);
 }
